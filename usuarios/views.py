@@ -4,6 +4,8 @@ from django.utils import timezone
 from django.core.mail import EmailMessage
 from django.contrib.auth.hashers import make_password, check_password
 from datetime import timedelta
+from .pacientes.builder import PacienteInvalidoError
+from .pacientes.facade import PacienteFacade
 import random
 from .models import (
     Usuario, RecuperacionPassword, Paciente, PlanCuidado,
@@ -354,11 +356,14 @@ def solo_cuidador(view_func):
     return wrapper
 
 
+# ── FACHADA DEL MÓDULO PACIENTES ───────────────────────────────────────────────
+pacientes_facade = PacienteFacade()
+
+
 # ── LISTA PACIENTES ────────────────────────────────────────────────────────────
 @solo_cuidador
 def lista_pacientes(request):
-    usuario_id = request.session.get('usuario_id')
-    pacientes = Paciente.objects.filter(id_cuidador_id=usuario_id)
+    pacientes = pacientes_facade.listar(request.session.get('usuario_id'))
     return render(request, 'pacientes/lista_pacientes.html', {'pacientes': pacientes})
 
 
@@ -366,21 +371,11 @@ def lista_pacientes(request):
 @solo_cuidador
 def agregar_paciente(request):
     if request.method == 'POST':
-        nombre = request.POST.get('nombre', '').strip()
-        fecha_nacimiento = request.POST.get('fecha_nacimiento')
-        diagnostico = request.POST.get('diagnostico', '').strip()
-        usuario_id = request.session.get('usuario_id')
-
-        if not nombre or not fecha_nacimiento:
-            return render(request, 'pacientes/agregar_paciente.html', {'error': 'Nombre y fecha de nacimiento son obligatorios.'})
-
-        Paciente.objects.create(
-            nombre=nombre,
-            fecha_nacimiento=fecha_nacimiento,
-            diagnostico=diagnostico,
-            estado=True,
-            id_cuidador_id=usuario_id
-        )
+        try:
+            pacientes_facade.registrar(request.POST, request.session.get('usuario_id'))
+        except PacienteInvalidoError as e:
+            return render(request, 'pacientes/agregar_paciente.html',
+                          {'errores': e.errores, 'datos': request.POST})
         messages.success(request, 'Paciente registrado correctamente.')
         return redirect('lista_pacientes')
     return render(request, 'pacientes/agregar_paciente.html')
@@ -389,58 +384,50 @@ def agregar_paciente(request):
 # ── DETALLE PACIENTE ───────────────────────────────────────────────────────────
 @solo_cuidador
 def detalle_paciente(request, id_paciente):
-    try:
-        paciente = Paciente.objects.get(
-            id_paciente=id_paciente,
-            id_cuidador_id=request.session.get('usuario_id')
-        )
-    except Paciente.DoesNotExist:
+    paciente = pacientes_facade.consultar(id_paciente, request.session.get('usuario_id'))
+    if paciente is None:
         return redirect('lista_pacientes')
     return render(request, 'pacientes/detalle_paciente.html', {'paciente': paciente})
-
 
 # ── EDITAR PACIENTE ────────────────────────────────────────────────────────────
 @solo_cuidador
 def editar_paciente(request, id_paciente):
-    try:
-        paciente = Paciente.objects.get(
-            id_paciente=id_paciente,
-            id_cuidador_id=request.session.get('usuario_id')
-        )
-    except Paciente.DoesNotExist:
+    usuario_id = request.session.get('usuario_id')
+    paciente = pacientes_facade.obtener(id_paciente, usuario_id)
+    if paciente is None:
         return redirect('lista_pacientes')
 
     if request.method == 'POST':
-        paciente.nombre = request.POST.get('nombre', '').strip()
-        paciente.fecha_nacimiento = request.POST.get('fecha_nacimiento')
-        paciente.diagnostico = request.POST.get('diagnostico', '').strip()
-
-        if not paciente.nombre or not paciente.fecha_nacimiento:
-            return render(request, 'pacientes/editar_paciente.html', {
-                'paciente': paciente,
-                'error': 'Nombre y fecha de nacimiento son obligatorios.'
-            })
-
-        paciente.save()
+        try:
+            pacientes_facade.actualizar(paciente, request.POST, usuario_id)
+        except PacienteInvalidoError as e:
+            return render(request, 'pacientes/editar_paciente.html',
+                          {'paciente': paciente, 'errores': e.errores, 'datos': request.POST})
         messages.success(request, 'Paciente actualizado correctamente.')
         return redirect('lista_pacientes')
-    return render(request, 'pacientes/editar_paciente.html', {'paciente': paciente})
 
+    return render(request, 'pacientes/editar_paciente.html', {
+        'paciente': paciente,
+        'datos': pacientes_facade.datos_formulario(paciente),
+    })
 
 # ── DESACTIVAR PACIENTE ────────────────────────────────────────────────────────
 @solo_cuidador
 def desactivar_paciente(request, id_paciente):
-    try:
-        paciente = Paciente.objects.get(
-            id_paciente=id_paciente,
-            id_cuidador_id=request.session.get('usuario_id')
-        )
-        paciente.estado = False
-        paciente.save()
+    usuario_id = request.session.get('usuario_id')
+    paciente = pacientes_facade.obtener(id_paciente, usuario_id)
+    if paciente:
+        pacientes_facade.desactivar(paciente, usuario_id)
         messages.success(request, f'Paciente {paciente.nombre} desactivado.')
-    except Paciente.DoesNotExist:
-        pass
     return redirect('lista_pacientes')
+
+
+# ── AUDITORÍA DE PACIENTES ─────────────────────────────────────────────────────
+@solo_cuidador
+def auditoria_pacientes(request):
+    registros = pacientes_facade.historial_auditoria(request.session.get('usuario_id'))
+    return render(request, 'pacientes/auditoria.html', {'registros': registros})
+
 
 
 # ── GESTIONAR FAMILIARES ───────────────────────────────────────────────────────

@@ -79,7 +79,10 @@ td { padding:15px 20px; border-top:1px solid #f0f0f0; color:#333; }
 
     <div class="header">
         <h1>Gestión de Pacientes</h1>
-        <a href="/pacientes/agregar/" class="btn-agregar">+ Agregar paciente</a>
+                <div style="display:flex;gap:10px;">
+            <a href="/pacientes/auditoria/" class="btn-ver" style="padding:12px 24px;font-size:14px;">Ver auditoría</a>
+            <a href="/pacientes/agregar/" class="btn-agregar">+ Agregar paciente</a>
+        </div>
     </div>
 
     {% if messages %}
@@ -103,7 +106,7 @@ td { padding:15px 20px; border-top:1px solid #f0f0f0; color:#333; }
             <tbody>
                 {% for paciente in pacientes %}
                 <tr>
-                    <td>{{ paciente.nombre }}</td>
+                    <td>{{ paciente.nombre }} {{ paciente.apellidos }}</td>
                     <td>{{ paciente.fecha_nacimiento }}</td>
                     <td>{{ paciente.diagnostico|default:"Sin diagnóstico" }}</td>
                     <td>

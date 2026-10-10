@@ -43,8 +43,25 @@ class RecuperacionPassword(models.Model):
 
 class Paciente(models.Model):
 
+    TIPOS_DOCUMENTO = [
+        ('CC', 'Cédula de ciudadanía'),
+        ('TI', 'Tarjeta de identidad'),
+        ('CE', 'Cédula de extranjería'),
+        ('PA', 'Pasaporte'),
+    ]
+    SEXOS = [
+        ('M', 'Masculino'),
+        ('F', 'Femenino'),
+        ('O', 'Otro'),
+    ]
+
     id_paciente = models.AutoField(primary_key=True)
     nombre = models.CharField(max_length=100)
+    apellidos = models.CharField(max_length=100, blank=True, default='')
+    tipo_documento = models.CharField(max_length=2, choices=TIPOS_DOCUMENTO, null=True, blank=True)
+    numero_documento = models.CharField(max_length=20, null=True, blank=True)
+    sexo = models.CharField(max_length=1, choices=SEXOS, null=True, blank=True)
+    contacto_emergencia = models.CharField(max_length=100, null=True, blank=True)
     fecha_nacimiento = models.DateField()
     diagnostico = models.TextField(null=True, blank=True)
     estado = models.BooleanField(default=True)
@@ -57,9 +74,10 @@ class Paciente(models.Model):
 
     class Meta:
         db_table = 'pacientes'
+        unique_together = ('tipo_documento', 'numero_documento')
 
     def __str__(self):
-        return self.nombre
+        return f"{self.nombre} {self.apellidos}".strip()
     
 class PlanCuidado(models.Model):
 
@@ -188,3 +206,36 @@ class HistorialModificacion(models.Model):
 
     def __str__(self):
         return f"Cambio en plan {self.id_plan_id} por {self.id_usuario.nombre}"
+
+class AuditoriaPaciente(models.Model):
+
+    ACCIONES = [
+        ('creado', 'Creación'),
+        ('actualizado', 'Modificación'),
+        ('consultado', 'Consulta'),
+        ('desactivado', 'Desactivación'),
+    ]
+
+    id_auditoria = models.AutoField(primary_key=True)
+    id_usuario = models.ForeignKey(
+        Usuario,
+        on_delete=models.SET_NULL,
+        null=True,
+        db_column='id_usuario'
+    )
+    id_paciente = models.ForeignKey(
+        Paciente,
+        on_delete=models.SET_NULL,
+        null=True,
+        db_column='id_paciente'
+    )
+    accion = models.CharField(max_length=20, choices=ACCIONES)
+    detalle = models.CharField(max_length=255, blank=True, default='')
+    fecha = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'auditoria_pacientes'
+        ordering = ['-fecha']
+
+    def __str__(self):
+        return f"{self.accion} - {self.detalle}"

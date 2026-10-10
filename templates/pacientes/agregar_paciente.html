@@ -26,12 +26,12 @@ body { background:#f5f7fb; display:flex; }
 .error { color:#e74c3c; margin-bottom:15px; font-size:14px; }
 
 label { display:block; color:#555; font-size:14px; margin-bottom:6px; }
-input, textarea {
+input, textarea, select {
     width:100%; padding:12px; border:1px solid #ddd;
     border-radius:10px; font-size:14px; margin-bottom:20px;
-    font-family:'Segoe UI',sans-serif;
+    font-family:'Segoe UI',sans-serif; background:white;
 }
-input:focus, textarea:focus { outline:none; border-color:#7ab6ff; }
+input:focus, textarea:focus, select:focus { outline:none; border-color:#7ab6ff; }
 textarea { height:100px; resize:vertical; }
 
 .botones { display:flex; gap:12px; }
@@ -67,21 +67,50 @@ textarea { height:100px; resize:vertical; }
     <div class="form-card">
         <h1>Agregar Paciente</h1>
 
-        {% if error %}
-            <p class="error">{{ error }}</p>
+        {% if errores %}
+            <div class="error">
+                {% for e in errores %}<p>{{ e }}</p>{% endfor %}
+            </div>
         {% endif %}
 
         <form method="POST">
             {% csrf_token %}
 
-            <label>Nombre completo *</label>
-            <input type="text" name="nombre" required>
+            <label>Nombres *</label>
+            <input type="text" name="nombre" value="{{ datos.nombre|default:'' }}" required>
+
+            <label>Apellidos *</label>
+            <input type="text" name="apellidos" value="{{ datos.apellidos|default:'' }}" required>
+
+            <label>Tipo de documento *</label>
+            <select name="tipo_documento" required>
+                <option value="">Seleccione...</option>
+                <option value="CC" {% if datos.tipo_documento == 'CC' %}selected{% endif %}>Cédula de ciudadanía</option>
+                <option value="TI" {% if datos.tipo_documento == 'TI' %}selected{% endif %}>Tarjeta de identidad</option>
+                <option value="CE" {% if datos.tipo_documento == 'CE' %}selected{% endif %}>Cédula de extranjería</option>
+                <option value="PA" {% if datos.tipo_documento == 'PA' %}selected{% endif %}>Pasaporte</option>
+            </select>
+
+            <label>Número de documento *</label>
+            <input type="text" name="numero_documento" value="{{ datos.numero_documento|default:'' }}" required>
 
             <label>Fecha de nacimiento *</label>
-            <input type="date" name="fecha_nacimiento" required>
+            <input type="date" name="fecha_nacimiento" value="{{ datos.fecha_nacimiento|default:'' }}" required>
 
-            <label>Diagnóstico</label>
-            <textarea name="diagnostico" placeholder="Describe el diagnóstico del paciente..."></textarea>
+            <label>Sexo *</label>
+            <select name="sexo" required>
+                <option value="">Seleccione...</option>
+                <option value="M" {% if datos.sexo == 'M' %}selected{% endif %}>Masculino</option>
+                <option value="F" {% if datos.sexo == 'F' %}selected{% endif %}>Femenino</option>
+                <option value="O" {% if datos.sexo == 'O' %}selected{% endif %}>Otro</option>
+            </select>
+
+            <label>Contacto de emergencia *</label>
+            <input type="text" name="contacto_emergencia" placeholder="Nombre y teléfono"
+                   value="{{ datos.contacto_emergencia|default:'' }}" required>
+
+            <label>Diagnóstico *</label>
+            <textarea name="diagnostico" placeholder="Describe el diagnóstico del paciente...">{{ datos.diagnostico|default:'' }}</textarea>
 
             <div class="botones">
                 <button type="submit" class="btn-guardar">Guardar paciente</button>
