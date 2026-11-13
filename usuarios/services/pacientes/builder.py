@@ -1,16 +1,28 @@
+"""
+PATRÓN BUILDER: arma un Paciente paso a paso y lo valida antes de entregarlo.
+
+No guarda nada en la base de datos. Para saber si un documento ya existe,
+le pregunta al repositorio.
+"""
 from datetime import date, datetime
-from ..models import Paciente
+
+from usuarios.models import Paciente
+from usuarios.repositories.paciente_repository import PacienteRepository
+
 from .validadores import ValidadorPaciente
 
+
 class PacienteInvalidoError(Exception):
-    
+
     def __init__(self, errores):
         self.errores = errores
         super().__init__("; ".join(errores))
 
+
 class PacienteBuilder:
-    
-    def __init__(self):
+
+    def __init__(self, repositorio=None):
+        self._repo = repositorio or PacienteRepository()
         self.reset()
 
     def reset(self):
@@ -44,7 +56,6 @@ class PacienteBuilder:
 
     # ── Resultado ────────────────────────────────────────────────────────
     def build(self, paciente_existente=None):
-       
         excluir_id = paciente_existente.id_paciente if paciente_existente else None
         errores = self._validar(excluir_id)
         if errores:
@@ -100,13 +111,10 @@ class PacienteBuilder:
             errores += ValidadorPaciente().validar(
                 d["tipo_documento"], d["numero_documento"], fecha)
 
-            repetidos = Paciente.objects.filter(
-                tipo_documento=d["tipo_documento"],
-                numero_documento=d["numero_documento"],
-            )
-            if excluir_id:
-                repetidos = repetidos.exclude(id_paciente=excluir_id)
-            if repetidos.exists():
+            # Antes: Paciente.objects.filter(...)  → ahora se le pregunta al repositorio
+            if self._repo.existe_documento(
+                d["tipo_documento"], d["numero_documento"], excluir_id
+            ):
                 errores.append("Ya existe un paciente con ese documento.")
 
         return errores

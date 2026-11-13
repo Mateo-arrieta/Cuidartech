@@ -3,8 +3,8 @@ from django.http import Http404
 from django.shortcuts import render, redirect
 
 from usuarios.controllers.decorators import solo_cuidador
-from usuarios.pacientes.builder import PacienteInvalidoError
-from usuarios.pacientes.facade import PacienteFacade
+from usuarios.services.pacientes.builder import PacienteInvalidoError
+from usuarios.services.pacientes.facade import PacienteFacade
 from usuarios.services.exceptions import (
     PacienteNoEncontradoError,
     FamiliarNoEncontradoError,
