@@ -10,7 +10,10 @@ from usuarios.models import (
     FamiliarPaciente,
     Notificacion,
     Paciente,
+    Usuario,
 )
+
+ROL_FAMILIAR = 2
 
 
 class PacienteRepository:
@@ -37,6 +40,30 @@ class PacienteRepository:
         if excluir_id:
             repetidos = repetidos.exclude(id_paciente=excluir_id)
         return repetidos.exists()
+
+    # ── Familiares asignados al paciente ─────────────────────────────────
+    def listar_familiares(self, paciente):
+        return FamiliarPaciente.objects.filter(
+            id_paciente=paciente
+        ).select_related("id_familiar")
+
+    def buscar_familiar_por_correo(self, correo):
+        return Usuario.objects.filter(correo=correo, id_rol=ROL_FAMILIAR).first()
+
+    def familiar_esta_asignado(self, familiar, paciente):
+        return FamiliarPaciente.objects.filter(
+            id_familiar=familiar, id_paciente=paciente
+        ).exists()
+
+    def asignar_familiar(self, familiar, paciente):
+        return FamiliarPaciente.objects.create(id_familiar=familiar, id_paciente=paciente)
+
+    def quitar_familiar(self, paciente, id_familiar):
+        """Devuelve True si había una relación y se borró."""
+        borrados, _ = FamiliarPaciente.objects.filter(
+            id_paciente=paciente, id_familiar_id=id_familiar
+        ).delete()
+        return borrados > 0
 
 
 class AuditoriaPacienteRepository:
