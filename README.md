@@ -47,7 +47,7 @@ Módulo del sistema que permite al cuidador **registrar, consultar, actualizar y
 - **Patrón arquitectónico:** MVC con capa de servicios (lógica de negocio) y capa de acceso a datos (repositorios).
 - **Patrones de diseño:** Facade, Builder, Strategy, Observer y Repository.
 - **Documento de arquitectura:** `docs/Trabajo_Final_Arquitectura_CuidarTech.docx`
-- **Documentación de la API (Postman):** `docs/postman/Cuidartech - API Pacientes.postman_collection.json`
+- **Documentación de la API:** sección 8 del documento de arquitectura (endpoints, seguridad, códigos de respuesta, ejemplos de petición y respuesta y capturas de Postman) y la tabla de la sección 4 de este README.
 
 ## 1. Requisitos
 
@@ -118,9 +118,9 @@ URL base: `http://127.0.0.1:8000/api`
 
 ### Cómo probarla en Postman
 
-1. Abrir Postman → **Import** → elegir el archivo de `docs/postman/`.
-2. Ejecutar **1. Login** con el correo y contraseña del cuidador (el token se guarda solo).
-3. Ejecutar las demás peticiones de la colección.
+1. Hacer `POST /api/auth/login/` con el correo y la contraseña del cuidador (Body → raw → JSON). La respuesta trae el `token`.
+2. En las demás peticiones, en **Authorization**, elegir **Bearer Token** y pegar el token.
+3. En el documento de arquitectura (sección 8) están los ejemplos de cada petición y las capturas de las respuestas.
 
 ## 5. Estructura del módulo
 
