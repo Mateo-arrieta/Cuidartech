@@ -1,32 +1,47 @@
+"""
+PATRÓN OBSERVER: cuando a un paciente le pasa algo (creado, actualizado,
+consultado, desactivado), se avisa a todos los observadores suscritos.
+
+Los observadores ya no usan el ORM: guardan a través de los repositorios.
+"""
 from abc import ABC, abstractmethod
 
-from ..models import AuditoriaPaciente, FamiliarPaciente, Notificacion
+from usuarios.repositories.paciente_repository import (
+    AuditoriaPacienteRepository,
+    NotificacionRepository,
+)
 
 
 class ObservadorPaciente(ABC):
-    
+
     @abstractmethod
     def actualizar(self, evento, paciente, usuario_id):
         """Se ejecuta cada vez que el sujeto publica un evento."""
 
 
 class AuditoriaObserver(ObservadorPaciente):
-    
+
+    def __init__(self, repositorio=None):
+        self._repo = repositorio or AuditoriaPacienteRepository()
+
     def actualizar(self, evento, paciente, usuario_id):
-        AuditoriaPaciente.objects.create(
-            id_usuario_id=usuario_id,
-            id_paciente=paciente,
+        self._repo.registrar(
+            usuario_id=usuario_id,
+            paciente=paciente,
             accion=evento,
             detalle=f"{paciente.nombre} {paciente.apellidos}".strip(),
         )
 
 
 class NotificacionFamiliaresObserver(ObservadorPaciente):
-    
+
     MENSAJES = {
         "actualizado": "Se actualizaron los datos del paciente {nombre}.",
         "desactivado": "El paciente {nombre} fue desactivado.",
     }
+
+    def __init__(self, repositorio=None):
+        self._repo = repositorio or NotificacionRepository()
 
     def actualizar(self, evento, paciente, usuario_id):
         plantilla = self.MENSAJES.get(evento)
@@ -34,20 +49,12 @@ class NotificacionFamiliaresObserver(ObservadorPaciente):
             return
 
         mensaje = plantilla.format(nombre=f"{paciente.nombre} {paciente.apellidos}".strip())
-        relaciones = FamiliarPaciente.objects.filter(
-            id_paciente=paciente
-        ).select_related("id_familiar")
-
-        for relacion in relaciones:
-            Notificacion.objects.create(
-                id_usuario=relacion.id_familiar,
-                mensaje=mensaje,
-                estado="no_leida",
-            )
+        for familiar in self._repo.familiares_de(paciente):
+            self._repo.crear(familiar, mensaje)
 
 
 class PacienteEventos:
-    
+
     def __init__(self):
         self._observadores = []
 
