@@ -4,8 +4,11 @@ from django.utils import timezone
 from django.core.mail import EmailMessage
 from django.contrib.auth.hashers import make_password, check_password
 from datetime import timedelta
-from .pacientes.builder import PacienteInvalidoError
-from .pacientes.facade import PacienteFacade
+from .controllers.decorators import solo_cuidador
+from .controllers.paciente_controller import (  # noqa: F401  (se reexportan para urls.py)
+    lista_pacientes, agregar_paciente, detalle_paciente, editar_paciente,
+    desactivar_paciente, auditoria_pacientes, gestionar_familiares, quitar_familiar,
+)
 import random
 from .models import (
     Usuario, RecuperacionPassword, Paciente, PlanCuidado,
@@ -343,135 +346,6 @@ def dashboard_familiar(request):
 # ── HOME ──────────────────────────────────────────────────────────────────────
 def home(request):
     return render(request, 'home.html')
-
-
-# ── DECORADOR: solo cuidadores ─────────────────────────────────────────────────
-def solo_cuidador(view_func):
-    def wrapper(request, *args, **kwargs):
-        if 'usuario_id' not in request.session:
-            return redirect('login')
-        if request.session.get('usuario_rol') != 1:
-            return redirect('dashboard')
-        return view_func(request, *args, **kwargs)
-    return wrapper
-
-
-# ── FACHADA DEL MÓDULO PACIENTES ───────────────────────────────────────────────
-pacientes_facade = PacienteFacade()
-
-
-# ── LISTA PACIENTES ────────────────────────────────────────────────────────────
-@solo_cuidador
-def lista_pacientes(request):
-    pacientes = pacientes_facade.listar(request.session.get('usuario_id'))
-    return render(request, 'pacientes/lista_pacientes.html', {'pacientes': pacientes})
-
-
-# ── AGREGAR PACIENTE ───────────────────────────────────────────────────────────
-@solo_cuidador
-def agregar_paciente(request):
-    if request.method == 'POST':
-        try:
-            pacientes_facade.registrar(request.POST, request.session.get('usuario_id'))
-        except PacienteInvalidoError as e:
-            return render(request, 'pacientes/agregar_paciente.html',
-                          {'errores': e.errores, 'datos': request.POST})
-        messages.success(request, 'Paciente registrado correctamente.')
-        return redirect('lista_pacientes')
-    return render(request, 'pacientes/agregar_paciente.html')
-
-
-# ── DETALLE PACIENTE ───────────────────────────────────────────────────────────
-@solo_cuidador
-def detalle_paciente(request, id_paciente):
-    paciente = pacientes_facade.consultar(id_paciente, request.session.get('usuario_id'))
-    if paciente is None:
-        return redirect('lista_pacientes')
-    return render(request, 'pacientes/detalle_paciente.html', {'paciente': paciente})
-
-# ── EDITAR PACIENTE ────────────────────────────────────────────────────────────
-@solo_cuidador
-def editar_paciente(request, id_paciente):
-    usuario_id = request.session.get('usuario_id')
-    paciente = pacientes_facade.obtener(id_paciente, usuario_id)
-    if paciente is None:
-        return redirect('lista_pacientes')
-
-    if request.method == 'POST':
-        try:
-            pacientes_facade.actualizar(paciente, request.POST, usuario_id)
-        except PacienteInvalidoError as e:
-            return render(request, 'pacientes/editar_paciente.html',
-                          {'paciente': paciente, 'errores': e.errores, 'datos': request.POST})
-        messages.success(request, 'Paciente actualizado correctamente.')
-        return redirect('lista_pacientes')
-
-    return render(request, 'pacientes/editar_paciente.html', {
-        'paciente': paciente,
-        'datos': pacientes_facade.datos_formulario(paciente),
-    })
-
-# ── DESACTIVAR PACIENTE ────────────────────────────────────────────────────────
-@solo_cuidador
-def desactivar_paciente(request, id_paciente):
-    usuario_id = request.session.get('usuario_id')
-    paciente = pacientes_facade.obtener(id_paciente, usuario_id)
-    if paciente:
-        pacientes_facade.desactivar(paciente, usuario_id)
-        messages.success(request, f'Paciente {paciente.nombre} desactivado.')
-    return redirect('lista_pacientes')
-
-
-# ── AUDITORÍA DE PACIENTES ─────────────────────────────────────────────────────
-@solo_cuidador
-def auditoria_pacientes(request):
-    registros = pacientes_facade.historial_auditoria(request.session.get('usuario_id'))
-    return render(request, 'pacientes/auditoria.html', {'registros': registros})
-
-
-
-# ── GESTIONAR FAMILIARES ───────────────────────────────────────────────────────
-@solo_cuidador
-def gestionar_familiares(request, id_paciente):
-    usuario_id = request.session.get('usuario_id')
-    paciente = get_object_or_404(Paciente, id_paciente=id_paciente, id_cuidador_id=usuario_id)
-    familiares_asignados = FamiliarPaciente.objects.filter(id_paciente=paciente).select_related('id_familiar')
-    error = None
-
-    if request.method == 'POST':
-        correo = request.POST.get('correo', '').strip()
-        try:
-            familiar = Usuario.objects.get(correo=correo, id_rol=2)
-            ya_asignado = FamiliarPaciente.objects.filter(id_familiar=familiar, id_paciente=paciente).exists()
-            if ya_asignado:
-                error = 'Este familiar ya está asignado a este paciente.'
-            else:
-                FamiliarPaciente.objects.create(id_familiar=familiar, id_paciente=paciente)
-                messages.success(request, f'{familiar.nombre} asignado correctamente.')
-                return redirect('gestionar_familiares', id_paciente=id_paciente)
-        except Usuario.DoesNotExist:
-            error = 'No se encontró ningún familiar registrado con ese correo.'
-
-    return render(request, 'pacientes/gestionar_familiares.html', {
-        'paciente': paciente,
-        'familiares_asignados': familiares_asignados,
-        'error': error,
-    })
-
-
-# ── QUITAR FAMILIAR ────────────────────────────────────────────────────────────
-@solo_cuidador
-def quitar_familiar(request, id_paciente, id_familiar):
-    usuario_id = request.session.get('usuario_id')
-    paciente = get_object_or_404(Paciente, id_paciente=id_paciente, id_cuidador_id=usuario_id)
-    try:
-        relacion = FamiliarPaciente.objects.get(id_paciente=paciente, id_familiar_id=id_familiar)
-        relacion.delete()
-        messages.success(request, 'Familiar removido correctamente.')
-    except FamiliarPaciente.DoesNotExist:
-        pass
-    return redirect('gestionar_familiares', id_paciente=id_paciente)
-
 
 # ── LISTA PLANES ───────────────────────────────────────────────────────────────
 @solo_cuidador
